@@ -2,6 +2,7 @@
 from Phidget22.Phidget import *
 from Phidget22.Devices.Accelerometer import *
 from Phidget22.Devices.DigitalInput import *
+from datetime import datetime
 from sys import exit
 
 import pgzrun
@@ -14,21 +15,40 @@ background_1 = Actor('road')
 background_1.right = WIDTH
 background_2 = Actor('road')
 background_2.right = -1400
+game_speed = 1
+level = 1
+
+def increase_game_speed():
+    global game_speed
+    global level
+    game_speed += 1
+    level = game_speed
+
+clock.schedule_interval(increase_game_speed, 10)
 
 def draw():
     screen.clear()
     background_1.draw()
     background_2.draw()
     car.draw()
-    
+    screen.draw.text("TIME: " + str(int(timer)), (20, 20), fontsize=40, owidth=1)
+    screen.draw.text("LEVEL " + str(level), topright=(680, 20), fontsize=40, owidth=1)
+
+initial_time = datetime.now().timestamp()
+
 def update():
-    background_1.right += 2
-    background_2.right += 2
+    global timer
+    timer = datetime.now().timestamp() - initial_time
+    background_1.right += game_speed
+    background_2.right += game_speed
+    car.x += game_speed
+
     if background_1.right == WIDTH * 4: background_1.right = -1400
     if background_2.right == WIDTH * 4: background_2.right = -1400
 
-    car.x += 2
-    car.angle = accelerometer.getAcceleration()[0] * 90
+    animate(car, duration=0.1, angle=(accelerometer.getAcceleration()[0] * 90))
+    if accel: animate(car, duration=0.1, pos=(car.x - (20 + level * 2 - abs(car.angle / 5)), car.y + (car.angle / 4)))
+    if reverse: animate(car, duration=0.1, pos=(car.x + (20 - abs(car.angle / 5)), car.y - (car.angle / 4)))
     if car.x > WIDTH or car.x < 0: exit()
     if car.y > HEIGHT or car.y < 0: exit()
 
@@ -45,29 +65,31 @@ def mapAcceleration(val):
         # if sensor is out of range, return last position
         return car.pos[1] 
 
-def accelerate(self, state):
-    car.x -= 20 - abs(car.angle / 5)
-    car.y += car.angle / 5
+def accelerateHook(self, state):
+    global accel
+    if state: accel = True
+    else: accel = False
 
-def brake(self, state):
-    car.x += 20 - abs(car.angle / 5)
-    car.y -= car.angle / 5
+def reverseHook(self, state):
+    global reverse
+    if state: reverse = True
+    else: reverse = False
 
 # Create, Address, Subscribe to Events and Open
 accelerometer = Accelerometer()
 accelerometer.openWaitForAttachment(1000)
-# accelerometer.setDataInterval(accelerometer.getMinDataInterval())
+accelerometer.setDataInterval(accelerometer.getMinDataInterval())
 
 redButton = DigitalInput()
 redButton.setIsHubPortDevice(True)
 redButton.setHubPort(5)
-redButton.setOnStateChangeHandler(brake)
+redButton.setOnStateChangeHandler(reverseHook)
 redButton.openWaitForAttachment(1000)
 
 greenButton = DigitalInput()
 greenButton.setIsHubPortDevice(True)
 greenButton.setHubPort(4)
-greenButton.setOnStateChangeHandler(accelerate)
+greenButton.setOnStateChangeHandler(accelerateHook)
 greenButton.openWaitForAttachment(1000)
 # Phidgets Code End
 
